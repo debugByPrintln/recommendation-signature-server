@@ -12,5 +12,5 @@ public class Mapper {
 
     @Id
     private String clientId;
-    private int counter;
+    private int counter; //prev name - holder
 }

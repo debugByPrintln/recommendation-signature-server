@@ -17,9 +17,9 @@ server:
   port: 8080
 
 model:
-  url: http://ml_service
+  url: http://localhost:8081
   url-to-predict: ${model.url}/predict
-  url-to-predict-with-context: ${model.url}/predictwithcontext
+  url-to-predict-with-context: ${model.url}/predict-with-context
 
 management:
   endpoints:

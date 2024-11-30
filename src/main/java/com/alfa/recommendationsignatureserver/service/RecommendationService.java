@@ -9,5 +9,7 @@ import java.util.List;
 public interface RecommendationService {
     RecommendationResponse getRecommendation(ClientData clientData);
 
-    RecommendationResponse getRecommendationWithContext(ClientData clientData, List<UseContextValues> useContextValues);
+    RecommendationResponse getRecommendationWithContext(ClientData clientData, UseContextValues useContextValues);
+
+    void setCounterResetThreshold(int threshold);
 }

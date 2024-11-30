@@ -17,11 +17,12 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 
 @Service
 @Slf4j
 public class RecommendationServiceImpl implements RecommendationService {
+
+    private int counterResetThreshold = 3;
 
     @Value(value = "${model.url-to-predict}")
     private String urlToPredict;
@@ -39,8 +40,32 @@ public class RecommendationServiceImpl implements RecommendationService {
     }
 
     @Override
+    public RecommendationResponse getRecommendation(ClientData clientData){
+        RecommendationResponse recommendationResponse = new RecommendationResponse();
+        try {
+            recommendationResponse = restTemplate.postForObject(urlToPredict, clientData, RecommendationResponse.class);
+
+            if (recommendationResponse == null) {
+                log.warn("Received null response from ML service. Setting recommendation signature method to {}", SignatureMethods.NoRecommendedMethod);
+                recommendationResponse = new RecommendationResponse();
+                recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+            }
+            else {
+                log.info("Got recommendation for client data {} with signature recommendation: {}", clientData, recommendationResponse.getRecommendedMethod());
+            }
+        }
+
+        catch (RestClientException e){
+            log.warn("Unable to receive signature recommendation. Setting recommendation signature method to {}", SignatureMethods.NoRecommendedMethod);
+            recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+        }
+
+        return recommendationResponse;
+    }
+
+    @Override
     @Transactional
-    public RecommendationResponse getRecommendation(ClientData clientData) {
+    public RecommendationResponse getRecommendationWithContext(ClientData clientData, UseContextValues useContextValues) {
         RecommendationResponse recommendationResponse = new RecommendationResponse();
         try {
             Mapper mapper = mapperRepository.findByClientId(clientData.getClientId());
@@ -49,28 +74,27 @@ public class RecommendationServiceImpl implements RecommendationService {
                 mapper.setClientId(clientData.getClientId());
                 mapper.setCounter(0);
                 mapperRepository.save(mapper);
-                // Call ML service for recommendation
-                recommendationResponse = restTemplate.postForObject(urlToPredict, clientData, RecommendationResponse.class);
+                log.info("Calling ML service with context for new user with client data: {} and use context: {}", clientData, useContextValues);
+                recommendationResponse = callMLServiceWithContextForNewbie(clientData, useContextValues);
             }
             else {
                 mapper.setCounter(mapper.getCounter() + 1);
                 mapperRepository.save(mapper);
-                if (mapper.getCounter() > 3) {
+                if (mapper.getCounter() > counterResetThreshold) {
                     // Reset counter
                     mapper.setCounter(0);
                     mapperRepository.save(mapper);
-                    // Call ML service for recommendation
-                    recommendationResponse = restTemplate.postForObject(urlToPredict, clientData, RecommendationResponse.class);
+                    log.info("Calling ML service with context for existing user with client data {} and use context {}", clientData, useContextValues);
+                    recommendationResponse = callMLServiceWithContext(clientData, useContextValues);
                 }
                 else {
-                    // Return default recommendation
+                    log.info("No need to disturb user for now with client data: {}", clientData);
                     recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
                 }
             }
 
             if (recommendationResponse == null) {
                 log.warn("Received null response from ML service. Setting recommendation signature method to {}", SignatureMethods.NoRecommendedMethod);
-                recommendationResponse = new RecommendationResponse();
                 recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
             }
             else {
@@ -85,54 +109,33 @@ public class RecommendationServiceImpl implements RecommendationService {
     }
 
     @Override
-    @Transactional
-    public RecommendationResponse getRecommendationWithContext(ClientData clientData, List<UseContextValues> useContextValues) {
-        RecommendationResponse recommendationResponse = new RecommendationResponse();
-        try {
-            Mapper mapper = mapperRepository.findByClientId(clientData.getClientId());
-            if (mapper == null) {
-                mapper = new Mapper();
-                mapper.setClientId(clientData.getClientId());
-                mapper.setCounter(0);
-                mapperRepository.save(mapper);
-                // Call ML service with context for recommendation
-                recommendationResponse = callMLServiceWithContext(clientData, useContextValues);
-            }
-            else {
-                mapper.setCounter(mapper.getCounter() + 1);
-                mapperRepository.save(mapper);
-                if (mapper.getCounter() > 3) {
-                    // Reset counter
-                    mapper.setCounter(0);
-                    mapperRepository.save(mapper);
-                    // Call ML service with context for recommendation
-                    recommendationResponse = callMLServiceWithContext(clientData, useContextValues);
-                }
-                else {
-                    // Return default recommendation
-                    recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
-                }
-            }
-
-            if (recommendationResponse == null) {
-                log.warn("Received null response from ML service. Setting recommendation signature method to {}", SignatureMethods.NoRecommendedMethod);
-                recommendationResponse = new RecommendationResponse();
-                recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
-            } else {
-                log.info("Got recommendation for client {} with signature recommendation: {}", clientData.getClientId(), recommendationResponse.getRecommendedMethod());
-            }
-        } catch (RestClientException e) {
-            log.warn("Unable to receive signature recommendation. Setting recommendation signature method to {}", SignatureMethods.NoRecommendedMethod);
-            recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
-        }
-        return recommendationResponse;
+    public void setCounterResetThreshold(int threshold){
+        this.counterResetThreshold = threshold;
     }
 
-    private RecommendationResponse callMLServiceWithContext(ClientData clientData, List<UseContextValues> useContextValues) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(urlToPredictWithContext)
-                .queryParam("useContext", useContextValues.stream().map(Enum::name).toArray(String[]::new));
-        URI uri = builder.build().toUri();
+    private RecommendationResponse callMLServiceWithContextForNewbie(ClientData clientData, UseContextValues useContextValues){
+        URI uri = buildURIForNewbie(useContextValues);
+        log.info("Calling ML service for newbie with context: {}", uri.toString());
+        return restTemplate.postForObject(uri, clientData, RecommendationResponse.class);
+    }
+
+    private RecommendationResponse callMLServiceWithContext(ClientData clientData, UseContextValues useContextValues) {
+        URI uri = buildURI(useContextValues);
         log.info("Calling ML service with context: {}", uri.toString());
         return restTemplate.postForObject(uri, clientData, RecommendationResponse.class);
+    }
+
+    private URI buildURIForNewbie(UseContextValues useContextValues){
+        UriComponentsBuilder builder  = UriComponentsBuilder.fromUriString(urlToPredictWithContext)
+                .queryParam("isNew", true)
+                .queryParam("useContext", useContextValues.name());
+        return builder.build().toUri();
+    }
+
+    private URI buildURI(UseContextValues useContextValues){
+        UriComponentsBuilder builder  = UriComponentsBuilder.fromUriString(urlToPredictWithContext)
+                .queryParam("isNew", false)
+                .queryParam("useContext", useContextValues.name());
+        return builder.build().toUri();
     }
 }
