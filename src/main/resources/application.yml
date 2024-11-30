@@ -5,5 +5,5 @@ server:
   port: 8080
 
 model:
-  url: http://localhost:8081
+  url: http://ml_service
   url-to-predict: ${model.url}/predict
