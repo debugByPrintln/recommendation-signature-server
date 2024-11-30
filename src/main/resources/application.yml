@@ -7,3 +7,14 @@ server:
 model:
   url: http://ml_service
   url-to-predict: ${model.url}/predict
+  url-to-predict-with-context: ${model.url}/predictwithcontext
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "prometheus"
+  prometheus:
+    metrics:
+      export:
+        enabled: true
