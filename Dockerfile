@@ -1,22 +1,21 @@
 # Используем официальный образ Java 21 в качестве базового образа
-FROM openjdk:21-jdk-slim
+FROM maven:3.9.6-amazoncorretto-21 AS build
 
 # Устанавливаем рабочую директорию внутри контейнера
-WORKDIR /app
+COPY src /usr/src/app/src
+COPY pom.xml /usr/src/app
 
-# Копируем файл сборки (например, pom.xml) и исходный код в контейнер
-COPY pom.xml .
-COPY src ./src
+# Собираем проект и создаем JAR-файл
+RUN mvn -f /usr/src/app/pom.xml clean package
 
-# Устанавливаем Maven и собираем проект
-RUN apt-get update && apt-get install -y maven
-RUN mvn clean package -DskipTests
+# Используем базовый образ с Java для запуска приложения
+FROM amazoncorretto:21
 
-# Копируем собранный JAR-файл в контейнер
-COPY target/recommendation-signature-server-0.0.1-SNAPSHOT.jar app.jar
+# Копируем JAR-файл из контейнера сборки в текущий контейнер
+COPY --from=build /usr/src/app/target/recommendation-signature-server-0.0.1-SNAPSHOT.jar app.jar
 
 # Указываем порт, который будет использоваться приложением
 EXPOSE 8080
 
-# Запускаем приложение при старте контейнера
+# Запускаем приложение
 ENTRYPOINT ["java", "-jar", "app.jar"]
