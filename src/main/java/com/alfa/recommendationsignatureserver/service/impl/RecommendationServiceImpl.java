@@ -45,7 +45,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
             }
             else {
-                log.info("Got recommendation for client {} with signature recommendation: {}", clientData.getClientId(), recommendationResponse.getRecommendedMethod());
+                log.info("Got recommendation for client {} with signature recommendation: {}", clientData, recommendationResponse.getRecommendedMethod());
             }
         }
 
