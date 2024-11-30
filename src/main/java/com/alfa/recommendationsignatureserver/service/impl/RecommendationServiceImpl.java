@@ -65,31 +65,38 @@ public class RecommendationServiceImpl implements RecommendationService {
 
     @Override
     @Transactional
-    public RecommendationResponse getRecommendationWithContext(ClientData clientData, UseContextValues useContextValues) {
+    public RecommendationResponse getRecommendationWithContext(ClientData clientData, UseContextValues useContextValue) {
         RecommendationResponse recommendationResponse = new RecommendationResponse();
         try {
-            Mapper mapper = mapperRepository.findByClientId(clientData.getClientId());
-            if (mapper == null) {
-                mapper = new Mapper();
-                mapper.setClientId(clientData.getClientId());
-                mapper.setCounter(0);
-                mapperRepository.save(mapper);
-                log.info("Calling ML service with context for new user with client data: {} and use context: {}", clientData, useContextValues);
-                recommendationResponse = callMLServiceWithContextForNewbie(clientData, useContextValues);
+            if (useContextValue == UseContextValues.change_signature_method) {
+                // Always suggest changing the signature method
+                log.info("Always suggesting to change signature method for client data: {} and use context: {}", clientData, useContextValue);
+                recommendationResponse = callMLServiceWithContext(clientData, useContextValue);
             }
             else {
-                mapper.setCounter(mapper.getCounter() + 1);
-                mapperRepository.save(mapper);
-                if (mapper.getCounter() > counterResetThreshold) {
-                    // Reset counter
+                Mapper mapper = mapperRepository.findByClientId(clientData.getClientId());
+                if (mapper == null) {
+                    mapper = new Mapper();
+                    mapper.setClientId(clientData.getClientId());
                     mapper.setCounter(0);
                     mapperRepository.save(mapper);
-                    log.info("Calling ML service with context for existing user with client data {} and use context {}", clientData, useContextValues);
-                    recommendationResponse = callMLServiceWithContext(clientData, useContextValues);
+                    log.info("Calling ML service with context for new user with client data: {} and use context: {}", clientData, useContextValue);
+                    recommendationResponse = callMLServiceWithContextForNewbie(clientData, useContextValue);
                 }
                 else {
-                    log.info("No need to disturb user for now with client data: {}", clientData);
-                    recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+                    mapper.setCounter(mapper.getCounter() + 1);
+                    mapperRepository.save(mapper);
+                    if (mapper.getCounter() > counterResetThreshold) {
+                        // Reset counter
+                        mapper.setCounter(0);
+                        mapperRepository.save(mapper);
+                        log.info("Calling ML service with context for existing user with client data {} and use context {}", clientData, useContextValue);
+                        recommendationResponse = callMLServiceWithContext(clientData, useContextValue);
+                    }
+                    else {
+                        log.info("No need to disturb user for now with client data: {}", clientData);
+                        recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+                    }
                 }
             }
 
