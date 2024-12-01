@@ -16,6 +16,7 @@ import java.util.List;
 @RequestMapping("api/recommendations")
 @Tag(name = "Recommendation receiver", description = "Operations related to getting signature recommendations")
 @Slf4j
+@CrossOrigin(origins = "*")
 public class RecommendationController {
 
     private final RecommendationService recommendationService;
