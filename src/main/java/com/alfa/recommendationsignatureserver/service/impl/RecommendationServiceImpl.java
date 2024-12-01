@@ -44,7 +44,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         RecommendationResponse recommendationResponse = new RecommendationResponse();
         // Always suggest changing the signature method
         if (!clientData.getCurrentMethod().equals(SignatureMethods.SMS.name())){
-            log.info("No need to change signature for client: {}", clientData);
+            log.info("No need to change signature method for client: {}", clientData);
             recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
             return recommendationResponse;
         }
