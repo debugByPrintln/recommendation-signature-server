@@ -42,6 +42,13 @@ public class RecommendationServiceImpl implements RecommendationService {
     @Override
     public RecommendationResponse getRecommendation(ClientData clientData){
         RecommendationResponse recommendationResponse = new RecommendationResponse();
+        // Always suggest changing the signature method
+        if (!clientData.getCurrentMethod().equals(SignatureMethods.SMS.name())){
+            log.info("No need to change signature for client: {}", clientData);
+            recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+            return recommendationResponse;
+        }
+
         try {
             recommendationResponse = restTemplate.postForObject(urlToPredict, clientData, RecommendationResponse.class);
 
@@ -68,11 +75,18 @@ public class RecommendationServiceImpl implements RecommendationService {
     public RecommendationResponse getRecommendationWithContext(ClientData clientData, UseContextValues useContextValue) {
         RecommendationResponse recommendationResponse = new RecommendationResponse();
         try {
+            // Always suggest changing the signature method
             if (useContextValue == UseContextValues.change_signature_method) {
-                // Always suggest changing the signature method
                 log.info("Always suggesting to change signature method for client data: {} and use context: {}", clientData, useContextValue);
                 recommendationResponse = callMLServiceWithContext(clientData, useContextValue);
             }
+            // If user already using NOT SMS signature method
+            else if (!clientData.getCurrentMethod().equals(SignatureMethods.SMS.name())) {
+                log.info("No need to change signature for client: {}", clientData);
+                recommendationResponse.setRecommendedMethod(SignatureMethods.NoRecommendedMethod);
+                return recommendationResponse;
+            }
+
             else {
                 Mapper mapper = mapperRepository.findByClientId(clientData.getClientId());
                 if (mapper == null) {
